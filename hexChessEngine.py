@@ -3,11 +3,12 @@ This classi responsible for storing all the information about the curent state o
 Also responsible for determinating valid moves on current state
 Also keeps a move log
 """
+import copy
 import numpy as np
 
 class gameState():
     def __init__(self):
-        self.board = (
+        board_tuple = (
             ["_","_","_","_","_","_"],
             ["wp","_","_","_","_","_","bp"],
             ["wR","wp","_","_","_","_","bp","bR"],
@@ -20,6 +21,9 @@ class gameState():
             ["wp","_","_","_","_","_","bp"],
             ["_","_","_","_","_","_"],
         )
+        board = [list(row) for row in board_tuple]    
 
-        self.hexagons = ()
-    
+        
+
+        depth = 2
+        self.fullBoard = [copy.deepcopy(board) for _ in range(depth)]
