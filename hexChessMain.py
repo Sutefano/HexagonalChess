@@ -36,6 +36,25 @@ def draw_hexagon(surface, color, center, size):
     p.draw.polygon(surface, color, points)
     return points
 
+def isClickInHexagon(point, vertices):
+    x, y = point
+    n = len(vertices)
+    inside = False
+
+    p1x, p1y = vertices[0]
+    for i in range(n + 1):
+        p2x, p2y = vertices[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+
+    return inside
+
 # Main loop
 def main():
     p.init()
@@ -44,19 +63,33 @@ def main():
     screen.fill(p.Color(BACKGROUND))
     gs = hexChessEngine.gameState()
     loadImages()
-    hexSelected = ()
-
+    hexSelected = () #
+    playerClick = [] #2 Values , keeps tracks of players clicks
     running = True
     while running:
-
-        
         # Event handling
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
             elif e.type == p.MOUSEBUTTONDOWN:
                 location = p.mouse.get_pos()
-                
+                posX = location[0]
+                posY = location[1]
+                for row_idx, row in enumerate(gs.fullBoard[1]):
+                    for col_idx, hexagon in enumerate(row):
+                        if hexagon and isClickInHexagon((posX, posY), hexagon):
+
+                            if hexSelected == (row_idx, col_idx):
+                                hexSelected = ()
+                                playerClick = []
+                            else:
+                                hexSelected = (row_idx, col_idx)
+                                playerClick.append(hexSelected)
+                            if len(playerClick) == 2:
+                                move = hexChessEngine.Move(playerClick[0], playerClick[1], gs.fullBoard)
+                                gs.makeMove(move)
+                                hexSelected = ()
+                                playerClick = []
 
         drawGameState(screen,gs)
         clock.tick(MAX_FPS)
@@ -97,10 +130,10 @@ def drawPieces(screen,fullBoard):
         num = 0
         if x < 6:
             for i in range(6 - x, 12):
-                piece = fullBoard[0][x][num + (5+x)]
+                piece = fullBoard[0][x][num]
                 if piece != "_":
                     screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(245 + (60 * (i - 6)) + (28 * x)), 35 ,35))
-                num += -1
+                num += 1
 
         elif x > 5:
             for j in range(10 - (x - 6), 0, -1):
@@ -108,8 +141,6 @@ def drawPieces(screen,fullBoard):
                 if piece != "_":
                     screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(245 + (60 * (j-6)) + (28 * x)), 35 ,35))
                 num += 1  
-            
-
             
 
 
