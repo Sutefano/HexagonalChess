@@ -4,6 +4,8 @@ Main Driver File. Responsible for handling user inputs and displaying the curren
 import pygame as p
 import math
 import hexChessEngine
+#Sound imports
+from playsound import playsound
 
 # Set up the display
 WIDTH, HEIGHT = 1600, 900
@@ -17,12 +19,15 @@ GREEN2 = (182, 227, 201)
 GREEN3 = (121, 209, 158)
 BACKGROUND = (173, 155, 114)
 
+
 #loadImages
 def loadImages():
     pieces = ["bB", "bK", "bN", "bp", "bQ", "bR", "wB", "wK", "wN", "wp", "wQ","wR"]
     for piece in pieces:
         IMAGES[piece] = p.transform.scale(p.image.load("./images/" + piece + ".png"), (55,55))
     #Image can be accessed by 'IMAGES['wp']'
+
+
 
 # Function to draw a single hexagon at a specific point
 def draw_hexagon(surface, color, center, size):
@@ -58,16 +63,17 @@ def isClickInHexagon(point, vertices):
 # Main loop
 def main():
     p.init()
+    moveSound = p.mixer.Sound("./sounds/Move.mp3")
     screen = p.display.set_mode((WIDTH, HEIGHT))
     clock = p.time.Clock()
     screen.fill(p.Color(BACKGROUND))
     gs = hexChessEngine.gameState()
-
-    validMoves = gs.getAllValidMoves()
+    validMoves = gs.getValidMovesCHECK()
     moveMade = False #Flag variable for when a move is made
  
     loadImages()
     hexSelected = () #
+    drawBoardState = True
     playerClick = [] #2 Values , keeps tracks of players clicks
     running = True
     while running:
@@ -75,38 +81,40 @@ def main():
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
-
+            
             #Mouse Handlers
             #___________________________
             #Move Pieces
             elif e.type == p.MOUSEBUTTONDOWN:
                 location = p.mouse.get_pos()
                 posX = location[0]
-                posY = location[1] 
+                posY = location[1]
+                if len(validMoves) == 0:
+                    gs.checkMate = True
                 for row_idx, row in enumerate(gs.fullBoard[1]):
                     for col_idx, hexagon in enumerate(row):
                         if hexagon and isClickInHexagon((posX, posY), hexagon):
                             if hexSelected == (row_idx, col_idx):
                                 hexSelected = ()
                                 playerClick = []
+
                             else:
-                                if(gs.fullBoard[0][row_idx][col_idx]!="_"):
-                                    hexSelected = (row_idx, col_idx)
-                                    playerClick.append(hexSelected)
-                                elif(gs.fullBoard[0][row_idx][col_idx]!="_" or len(playerClick) > 0):
-                                    hexSelected = (row_idx, col_idx)
-                                    playerClick.append(hexSelected)
-                                else:
-                                    hexSelected = ()
-                                    playerClick = []
+                                hexSelected = (row_idx, col_idx)
+                                playerClick.append(hexSelected)
+
                             if len(playerClick) == 2:
                                 move = hexChessEngine.Move(playerClick[0], playerClick[1], gs.fullBoard)
-                                if move in validMoves:
-                                    print(move.getChessNotation())
-                                    gs.makeMove(move)
-                                    moveMade = True
-                                hexSelected = ()
-                                playerClick = []
+                                for i in range(len(validMoves)):
+                                    if move == validMoves[i]:
+                                        print(move.getChessNotation())
+                                        gs.makeMove(validMoves[i])
+                                        moveSound.play()
+                                        moveMade = True
+                                        drawBoardState = True
+                                        hexSelected = ()
+                                        playerClick = []
+                                if not moveMade:
+                                    playerClick = [hexSelected]
 
 
             #Key Handler
@@ -114,20 +122,38 @@ def main():
             #Undo
             elif e.type == p.KEYDOWN:
                 if e.key == p.K_z:
+                    if (len(gs.moveLog)) != 0:
+                        moveSound.play()
                     gs.undo()
                     moveMade = True
-
+                    drawBoardState = True
+                    
         if moveMade:
-            validMoves = gs.getAllValidMoves()
+            validMoves = gs.getValidMovesCHECK()
             moveMade = False
 
-        drawGameState(screen,gs)
+        if drawBoardState:
+            drawGameState(screen,gs, validMoves, hexSelected)
+
         clock.tick(MAX_FPS)
         p.display.flip()
 
-def drawGameState(screen, gs):
+def drawGameState(screen, gs, validMoves, hexSelected):
     drawBoard(screen,gs.fullBoard)
+    highlightHex(screen, gs, validMoves, hexSelected)
     drawPieces(screen,gs.fullBoard)#draw pieces on top of those hexagons
+
+"""
+Highlight Moves
+"""
+def highlightHex(screen, gs, validMoves, hexSelected):
+    if hexSelected != ():
+        row, col = hexSelected
+        if gs.fullBoard[0][row][col][0] == ('w' if gs.whiteToMove else 'b'):
+            p.draw.polygon(screen,p.Color('blue'),gs.fullBoard[1][row][col],3)
+            for move in validMoves:
+                if move.startRow == row and move.startCol == col:
+                    p.draw.polygon(screen,p.Color((215, 224, 117, 128)),gs.fullBoard[1][move.endRow][move.endCol],3)
 
 """
 Draw Squares On board
@@ -138,7 +164,6 @@ def drawBoard(screen,fullBoard):
     for x in range(11):
         num = 0
         width = 0
-        colorX = 1
         if x < 6:
             width = 0 + x
             for i in range(6 - x, 12):
