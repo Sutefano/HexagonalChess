@@ -60,17 +60,18 @@ def isClickInHexagon(point, vertices):
 
     return inside
 
+    
+
 # Main loop
 def main():
     p.init()
     moveSound = p.mixer.Sound("./sounds/Move.mp3")
-    screen = p.display.set_mode((WIDTH, HEIGHT))
+    screen = p.display.set_mode((WIDTH, HEIGHT),p.RESIZABLE)
     clock = p.time.Clock()
-    screen.fill(p.Color(BACKGROUND))
     gs = hexChessEngine.gameState()
     validMoves = gs.getValidMovesCHECK()
     moveMade = False #Flag variable for when a move is made
- 
+    
     loadImages()
     hexSelected = () #
     drawBoardState = True
@@ -81,11 +82,14 @@ def main():
         for e in p.event.get():
             if e.type == p.QUIT:
                 running = False
-            
+            #if len(validMoves) == 0:
+            #   running = False
+            #
+
             #Mouse Handlers
             #___________________________
             #Move Pieces
-            elif e.type == p.MOUSEBUTTONDOWN:
+            if e.type == p.MOUSEBUTTONDOWN:
                 location = p.mouse.get_pos()
                 posX = location[0]
                 posY = location[1]
@@ -107,12 +111,17 @@ def main():
                                 for i in range(len(validMoves)):
                                     if move == validMoves[i]:
                                         print(move.getChessNotation())
+                                        #print(move)
+                                        #print(move.startCol,move.endCol)
+                                        #print(move.startRow,move.endRow)
                                         gs.makeMove(validMoves[i])
                                         moveSound.play()
                                         moveMade = True
                                         drawBoardState = True
                                         hexSelected = ()
                                         playerClick = []
+                                        
+
                                 if not moveMade:
                                     playerClick = [hexSelected]
 
@@ -120,13 +129,19 @@ def main():
             #Key Handler
             #___________________________
             #Undo
-            elif e.type == p.KEYDOWN:
+            if e.type == p.KEYDOWN:
                 if e.key == p.K_z:
                     if (len(gs.moveLog)) != 0:
                         moveSound.play()
                     gs.undo()
                     moveMade = True
                     drawBoardState = True
+
+            if e.type == p.VIDEORESIZE:  # Detect window resize
+                print ("true")
+                screen = p.display.set_mode((600,600), p.RESIZABLE)
+                screen = e.screen
+                    
                     
         if moveMade:
             validMoves = gs.getValidMovesCHECK()
@@ -156,9 +171,13 @@ def highlightHex(screen, gs, validMoves, hexSelected):
                     p.draw.polygon(screen,p.Color((215, 224, 117, 128)),gs.fullBoard[1][move.endRow][move.endCol],3)
 
 """
-Draw Squares On board
+Draw Hexes On board
 """
 def drawBoard(screen,fullBoard):
+    
+    screen.fill(p.Color(BACKGROUND))
+    p.draw.rect(screen, p.Color("DARKGREEN"), (0,0,500,900))
+    p.draw.rect(screen, p.Color("WHITE"), (50,50,400,800))
     colors = [p.Color(GREEN1),p.Color(GREEN2),p.Color(GREEN3)]
     xNeg = 4
     for x in range(11):
@@ -168,7 +187,7 @@ def drawBoard(screen,fullBoard):
             width = 0 + x
             for i in range(6 - x, 12):
                 color = colors[(i%3)-(x%3)]
-                pos = ((800 + (52*x)),(545 - (60 * (width)) + (88 * x)))
+                pos = ((800 + (52*x)),(590 - (60 * (width)) + (88 * x)))
                 points = draw_hexagon(screen, color, pos,35)
                 fullBoard[1][x][num] = points
                 num += 1
@@ -177,7 +196,7 @@ def drawBoard(screen,fullBoard):
             width = xNeg
             for j in range(10 - (x - 6), 0, -1):
                 color = colors[((x-1)%3)-(j%3)]
-                pos = ((800 + (52*x)),(545 - (60 * (width)) + (88 * xNeg)))
+                pos = ((800 + (52*x)),(590 - (60 * (width)) + (88 * xNeg)))
                 points = draw_hexagon(screen, color, pos,35)
                 fullBoard[1][x][num] = points
                 num += 1
@@ -199,7 +218,7 @@ def drawPieces(screen,fullBoard):
             for i in range(6 - x, 12):
                 piece = fullBoard[0][x][num]
                 if piece != "_":
-                    screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(520 - (60 * (width)) + (88 * x)), 35 ,35))
+                    screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(565 - (60 * (width)) + (88 * x)), 35 ,35))
                 width += 1
                 num += 1
 
@@ -208,10 +227,50 @@ def drawPieces(screen,fullBoard):
             for j in range(10 - (x - 6), 0, -1):
                 piece = fullBoard[0][x][num]
                 if piece != "_":
-                    screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(520 - (60 * (width)) + (88 * xNeg)), 35 ,35))
+                    screen.blit(IMAGES[piece], p.Rect((771 + (52*x)),(565 - (60 * (width)) + (88 * xNeg)), 35 ,35))
                 num += 1
                 width += 1
             xNeg += -1
+    
+def show_promotion_popup(screen):
+    screen_width, screen_height = screen.get_size()
+
+    # Draw popup background
+    popup_width, popup_height = 300, 100
+    popup_x = (screen_width - popup_width) // 2
+    popup_y = (screen_height - popup_height) // 2
+    popup_rect = p.Rect(popup_x, popup_y, popup_width, popup_height)
+    p.draw.rect(screen, (200, 200, 200), popup_rect)
+    p.draw.rect(screen, (0, 0, 0), popup_rect, 2)
+
+    # Load images for promotion options
+    queen_img = p.image.load("images/wQ.png")  # Adjust paths accordingly
+    rook_img = p.image.load("images/wR.png")
+    bishop_img = p.image.load("images/wB.png")
+    knight_img = p.image.load("images/wN.png")
+
+    piece_images = [queen_img, rook_img, bishop_img, knight_img]
+    option_rects = []
+    # Draw piece options
+    for i, img in enumerate(piece_images):
+        img = p.transform.scale(img, (60, 60))
+        x = popup_x + 20 + i * 70
+        y = popup_y + 20
+        screen.blit(img, (x, y))
+        option_rects.append(p.Rect(x, y, 60, 60))
+
+    p.display.flip()
+
+    # Wait for user selection
+    while True:
+        for event in p.event.get():
+            if event.type == p.QUIT:
+                p.quit()
+                return "Q"  # Default fallback
+            if event.type == p.MOUSEBUTTONDOWN:
+                for i, rect in enumerate(option_rects):
+                    if rect.collidepoint(event.pos):
+                        return ["Q", "R", "B", "N"][i]
             
 
 

@@ -28,17 +28,17 @@ class gameState():
             ["_","_","_","_","_","_"],
         )
         board_tuple_test = (
-            ["_","_","_","_","_","_"],
+            ["wK","_","_","_","_","bK"],
             ["_","_","_","_","_","_","_"],
-            ["_","_","_","bK","_","_","_","_"],
+            ["_","_","_","_","_","_","_","_"],
             ["_","_","_","_","_","_","_","_","_"],
             ["_","_","_","_","_","_","_","_","_","_"],
             ["_","_","_","_","_","_","_","_","_","_","_"],
-            ["wK","_","_","_","_","_","_","_","_","_"],
-            ["bQ","_","_","_","_","_","_","_","_"],
-            ["_","_","bN","_","_","_","_","_"],
-            ["_","_","_","_","_","_","_"],
-            ["_","_","_","_","_","_"],
+            ["_","_","_","wp","_","_","_","_","_","_"],
+            ["_","_","_","_","_","_","bp","_","_"],
+            ["_","_","_","_","_","_","_","_"],
+            ["wp","_","_","_","_","_","_"],
+            ["bp","bp","_","_","_","bp"],
         )
         board = [list(row) for row in board_tuple]    
         depth = 2
@@ -54,7 +54,9 @@ class gameState():
         self.bKLocation = (6,9)
         self.checkMate = False
         self.staleMate = False
-        self.enPassnt = ()#Coordinates for the hex where en passant is possible
+        self.enPassantPossible = ()
+        self.isPromotion = False
+        
 
     """
     Make a move
@@ -64,6 +66,7 @@ class gameState():
         self.fullBoard[0][move.endRow][move.endCol] = move.pieceMoved
         self.moveLog.append(move)
         self.whiteToMove = not self.whiteToMove
+
         #Update King Pos
         if move.pieceMoved == "wK":
             self.wKLocation = (move.endRow,move.endCol)
@@ -72,7 +75,29 @@ class gameState():
 
         #Pawn Promotion
         if move.isPawnPromotion:
-            self.fullBoard[0][move.endRow][move.endCol] = move.pieceMoved[0] + 'Q'
+            self.isPromotion = True
+
+        #En Passant
+        if move.isEnPassantMove and move.pieceMoved[0] == 'w':
+            print("white")
+            if (move.startRow < move.endRow):
+                self.fullBoard[0][move.startRow + 1][move.endCol - 1] = "_"
+            else:
+                self.fullBoard[0][move.startRow - 1][move.endCol - 1] = "_"
+
+        elif move.isEnPassantMove and move.pieceMoved[0] == 'b':
+            print("black")
+            if (move.startRow < move.endRow):
+                self.fullBoard[0][move.startRow + 1][move.endCol + 1] = "_"
+            else:
+                self.fullBoard[0][move.startRow - 1][move.endCol + 1] = "_"
+ 
+        
+        #update en passant
+        if move.pieceMoved[1] == 'p' and abs(move.startCol - move.endCol) == 2:
+            self.enPassantPossible = (move.startRow, (move.startCol + move.endCol)//2)
+        else:
+            self.enPassantPossible = ()
 
     """
     Undo a move
@@ -89,17 +114,42 @@ class gameState():
             elif  move.pieceMoved == "bK":
                 self.bKLocation  = (move.startRow,move.startCol)
 
+
+            #Undo En Passant Move
+            if move.isEnPassantMove:
+                self.fullBoard[0][move.endRow][move.endCol] = "_"
+                if move.pieceMoved[0] == 'w':
+                    if (move.startRow < move.endRow):
+                        self.fullBoard[0][move.startRow + 1][move.endCol - 1] = move.pieceCaptured
+                    else:
+                        self.fullBoard[0][move.startRow - 1][move.endCol - 1] = move.pieceCaptured
+
+                elif move.pieceMoved[0] == 'b':
+                    if (move.startRow < move.endRow):
+                        self.fullBoard[0][move.startRow + 1][move.endCol + 1] = move.pieceCaptured
+                    else:
+                        self.fullBoard[0][move.startRow - 1][move.endCol + 1] = move.pieceCaptured
+                           
+                self.enPassantPossible = (move.endRow, move.endCol)
+
+
+            #Undo a 2 hex pawn advance
+            if move.pieceMoved[1] == 'p'  and abs(move.startCol - move.endCol) == 2:
+                self.enPassantPossible = ()
+
+
     """
     All moves considering checks
     """
 
     def getValidMovesCHECK(self):
+
+        tempEnpassantPossible = self.enPassantPossible
         #1) generate all possible moves
         moves = self.getAllValidMoves()
         #2) for each move, make this move
         for i in range(len(moves) - 1 , -1 , -1):
             self.makeMove(moves[i])
-            print(self.bKLocation)
             #3) generate all opponet's moves
             #4) for each of your opponent's moves, see if they attack your king
             self.whiteToMove = not self.whiteToMove #swap turns again as the moveMove function swaps turns inherently
@@ -107,6 +157,7 @@ class gameState():
                 moves.remove(moves[i])
             self.whiteToMove = not self.whiteToMove
             self.undo()
+        self.enPassantPossible = tempEnpassantPossible
         return moves
     
     """
@@ -180,35 +231,48 @@ class gameState():
                 if row > 5:
                     #Left Capture White
                     if (row - 1) >= 0:  
-                        if (self.fullBoard[0][row - 1][col + 1] != "_") and (self.fullBoard[0][row - 1][col + 1][0] != 'w') :
+                        if self.fullBoard[0][row - 1][col + 1][0] == 'b':
                             moves.append(Move((row,col),(row - 1,col + 1),self.fullBoard))
+                        elif (row-1,col+1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col + 1),self.fullBoard, isEnPassantMove = True))
                     
-                    #Right Capture Right
+                    #Right Capture White
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col] != "_") and (self.fullBoard[0][row + 1][col][0] != 'w'):
+                        if self.fullBoard[0][row + 1][col][0] == 'b':
                             moves.append(Move((row,col),(row + 1,col),self.fullBoard))
+                        elif (row+1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col),self.fullBoard, isEnPassantMove = True))
                 
                 if row < 5:
                     #Left Capture White
                     if (row - 1) >= 0:
-                        if (self.fullBoard[0][row - 1][col] != "_") and (self.fullBoard[0][row - 1][col][0] != 'w'):
+                        if self.fullBoard[0][row - 1][col][0] == 'b':
                             moves.append(Move((row,col),(row - 1,col),self.fullBoard))
+                        elif (row - 1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col),self.fullBoard, isEnPassantMove = True))
+                        
                     
                     #Right Capture Right
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col + 1] != "_") and (self.fullBoard[0][row + 1][col + 1][0] != 'w'):
+                        if self.fullBoard[0][row + 1][col + 1][0] == 'b':
                             moves.append(Move((row,col),(row + 1,col + 1),self.fullBoard))
+                        elif (row + 1,col + 1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col + 1),self.fullBoard, isEnPassantMove = True))
 
                 if row == 5:
                     #Left Capture White
                     if (row - 1) >= 0:
-                        if (self.fullBoard[0][row - 1][col] != "_") and (self.fullBoard[0][row - 1][col][0] != 'w'):
+                        if self.fullBoard[0][row - 1][col][0] == 'b':
                             moves.append(Move((row,col),(row - 1,col),self.fullBoard))
+                        elif (row - 1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col),self.fullBoard, isEnPassantMove = True))
                     
                     #Right Capture Right
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col] != "_") and (self.fullBoard[0][row + 1][col][0] != 'w'):
+                        if self.fullBoard[0][row + 1][col][0] == 'b':
                             moves.append(Move((row,col),(row + 1,col),self.fullBoard))
+                        elif (row + 1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col),self.fullBoard, isEnPassantMove = True))
 
         #Black Pawn Moves
         else:
@@ -224,35 +288,47 @@ class gameState():
                 if row > 5:
                     #Left Capture Black
                     if (row - 1) >= 0:
-                        if (self.fullBoard[0][row - 1][col] != "_") and (self.fullBoard[0][row - 1][col][0] != 'b'): 
+                        if self.fullBoard[0][row - 1][col][0] == 'w':
                             moves.append(Move((row,col),(row - 1,col),self.fullBoard))
+                        elif (row - 1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col),self.fullBoard, isEnPassantMove = True))
 
                     #Right capture Black
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col - 1] != "_") and (self.fullBoard[0][row + 1][col - 1][0] != 'b'): 
+                        if self.fullBoard[0][row + 1][col - 1][0] == 'w':
                             moves.append(Move((row,col),(row + 1,col - 1),self.fullBoard))
+                        elif (row + 1,col - 1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col - 1),self.fullBoard, isEnPassantMove = True))
 
                 if row < 5:
                     #Left Capture Black
                     if (row - 1) >= 0:
-                        if (self.fullBoard[0][row - 1][col - 1]!= "_") and (self.fullBoard[0][row - 1][col - 1][0]!= 'b'): 
+                        if self.fullBoard[0][row - 1][col - 1][0] == 'w': 
                             moves.append(Move((row,col),(row - 1,col - 1),self.fullBoard))
+                        elif (row - 1,col - 1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col - 1),self.fullBoard, isEnPassantMove = True))
 
                     #Right capture Black
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col] != "_") and (self.fullBoard[0][row + 1][col][0] != 'b'): 
+                        if self.fullBoard[0][row + 1][col][0] == 'w':
                             moves.append(Move((row,col),(row + 1,col),self.fullBoard))
+                        elif (row + 1,col) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col),self.fullBoard, isEnPassantMove = True))
 
                 if row == 5:
                     #Left Capture Black
                     if (row - 1) >= 0:
-                        if (self.fullBoard[0][row - 1][col - 1] != "_") and (self.fullBoard[0][row - 1][col - 1][0] != 'b'): 
+                        if self.fullBoard[0][row - 1][col - 1][0] == 'w':
                             moves.append(Move((row,col),(row - 1,col - 1),self.fullBoard))
+                        elif (row - 1,col - 1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row - 1,col - 1),self.fullBoard, isEnPassantMove = True))
 
                     #Right capture Black
                     if (row + 1) <= 10:
-                        if (self.fullBoard[0][row + 1][col - 1] != "_") and (self.fullBoard[0][row + 1][col - 1][0] != 'b'): 
+                        if self.fullBoard[0][row + 1][col - 1][0] == 'w':
                             moves.append(Move((row,col),(row + 1,col - 1),self.fullBoard))
+                        elif (row + 1,col - 1) == self.enPassantPossible:
+                            moves.append(Move((row,col),(row + 1,col - 1),self.fullBoard, isEnPassantMove = True))
        
     """
     Get all Rook moves
@@ -612,7 +688,7 @@ class Move():
 
 
 
-    def __init__(self, firstHex, secondHex, fullBoard):
+    def __init__(self, firstHex, secondHex, fullBoard, isEnPassantMove = False):
         self.startRow = firstHex[0]
         self.startCol = firstHex[1]
         self.endRow = secondHex[0]
@@ -623,13 +699,14 @@ class Move():
         self.isPawnPromotion = False
         if (self.pieceMoved == "wp" and self.endCol == (self.lastColIndex[self.endRow] - 1)) or (self.pieceMoved == "bp" and self.endCol == 0):
             self.isPawnPromotion = True
-            print("true")
-
-        #En Passant
-        self.isEnPassantMove = False
         
         #Move ID
         self.moveID = self.startRow * 1000 + self.startCol * 100 + self.endRow * 10 + self.endCol
+
+        #En Passant
+        self.isEnPassantMove = isEnPassantMove
+        if self.isEnPassantMove:
+            self.pieceCaptured = 'wp' if self.pieceMoved == 'bp' else 'bp'
     
     def __eq__(self,other):
         if isinstance(other, Move):
